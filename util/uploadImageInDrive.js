@@ -1,19 +1,11 @@
 
 const { google } =require( "googleapis");
 const fs = require('fs');
-const { promises: Fs } = fs;
-const path =require( "path");
-const sharp = require('sharp');
-const { Buffer } =require( "buffer");
+const { Readable } = require("stream");
+
+
 //Check file path exists or not
-async function exists(path) {
-  try {
-    await Fs.access(path)
-    return true
-  } catch {
-    return false
-  }
-}
+
 
 //NOTE -   configure google OAuth2  authentication
  const googleDriveOauth2client = new google.auth.OAuth2(
@@ -42,26 +34,22 @@ googleDriveOauth2client.setCredentials({
   buffer ,
   parentsId ,
   profilePhotoId ) => {
-
     // console.log(googleDrive.permissions);
-    
-  const imageType = mimeType.split("/")[1]
-  //NOTE - create local file path
-  const localFilePath = path.join(__dirname, `../uploads/${fileName}.${imageType}`);
-
   try {
 
-    //NOTE -  save buffer data in local. 
-    await sharp(buffer).toFile(localFilePath);
+
 // console.log("ch1");
-
     //NOTE - If Pervious profile photo exit then Delete this photo
-    if (profilePhotoId !== null) {
-      await googleDrive.files.delete({
-        fileId: `${profilePhotoId}`
-      })
-    }
-
+    // if (profilePhotoId !== null) {
+    //   await googleDrive.files.delete({
+    //     fileId: `${profilePhotoId}`
+    //   })
+    // }
+    // Convert the image buffer to a readable stream
+    const imageStream = new Readable();
+    imageStream.push(buffer);
+    imageStream.push(null); // Indicates the end of the stream
+    
     //NOTE - Upload new Profile photo in drive
     const response = await googleDrive.files.create({
       requestBody: {
@@ -71,7 +59,7 @@ googleDriveOauth2client.setCredentials({
       },
       media: {
         mimeType: `${mimeType}`,
-        body: fs.createReadStream(localFilePath)
+        body: imageStream
       }
     })
     // console.log("ch2");
@@ -90,18 +78,14 @@ googleDriveOauth2client.setCredentials({
       }
     })
     // console.log("ch1");
-    //NOTE - Delete file from Uploads folder after upload drive
-    fs.unlinkSync(localFilePath);
+  
+  
 
     //NOTE - Return file Id.
     return fileId;
 
   } catch (error) {
-    if (await exists(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
-    console.error(error);
-    
+    // console.error(error);
     throw new Error("Internal server Error")
   }
 }
